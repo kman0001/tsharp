@@ -1,23 +1,79 @@
-# 1. 원본에서 파일만 추출 (빌드 서버는 amd64이므로 가능)
+# 1. 원본에서 jar 파일만 추출 (빌드 서버는 amd64이므로 가능)
 FROM --platform=linux/amd64 tarpha/torrssen2:latest AS source
 
-# 2. 실제 ARM 실행 환경 (OpenJDK 사용)
+# 2. ARM 호환 베이스 이미지 (내용은 기존과 동일)
 FROM alpine:3.12
 
-ENV PUID=0 PGID=100
+ENV PUID 0
+ENV PGID 100
 
-# 필수 패키지 설치
-RUN apk update && apk add --no-cache \
-    openjdk8-jre transmission-daemon nginx php7 php7-fpm php7-openssl php7-curl bash curl sed
+# 패키지 설치 (openjdk8-jre 추가 필수: jar 실행용)
+RUN apk update && \
+    apk add --no-cache \
+    openjdk8-jre \
+    transmission-daemon \
+    nginx \
+    php7 \
+    php7-fpm \
+    php7-openssl \
+    php7-curl \
+    bash \
+    sed
 
-# 파일 배치
+# Transmission
+RUN mkdir -p /config
+
+# 기존 경로 설정 및 사용자 추가 (원본 복사)
+RUN mkdir -p /config /www/torr /run/nginx && \
+    adduser -D -g 'www' www && \
+    chown -R www:www /var/lib/nginx /www
+
+# 추출한 jar 파일을 루트에 배치
 COPY --from=source /torrssen2.jar /torrssen2.jar
-# (기존 PHP 및 Nginx 설정 생략 - 이전 소스와 동일)
 
-# [핵심] ARM 전용: run.sh에서 JVM 옵션을 강제로 삭제하여 복사
+# PHP7
+ENV PHP_FPM_USER "www"
+ENV PHP_FPM_GROUP "www"
+ENV PHP_FPM_LISTEN_MODE "0660"
+ENV PHP_MEMORY_LIMIT "512M"
+ENV PHP_MAX_UPLOAD "50M"
+ENV PHP_MAX_FILE_UPLOAD "200"
+ENV PHP_MAX_POST "100M"
+ENV PHP_DISPLAY_ERRORS "On"
+ENV PHP_DISPLAY_STARTUP_ERRORS "On"
+ENV PHP_ERROR_REPORTING "E_COMPILE_ERROR\|E_RECOVERABLE_ERROR\|E_ERROR\|E_CORE_ERROR"
+ENV PHP_CGI_FIX_PATHINFO 0
+RUN sed -i "s|;listen.owner\s*=\s*nobody|listen.owner = ${PHP_FPM_USER}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|;listen.group\s*=\s*nobody|listen.group = ${PHP_FPM_GROUP}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|;listen.mode\s*=\s*0660|listen.mode = ${PHP_FPM_LISTEN_MODE}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|user\s*=\s*nobody|user = ${PHP_FPM_USER}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|group\s*=\s*nobody|group = ${PHP_FPM_GROUP}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|;log_level\s*=\s*notice|log_level = notice|g" /etc/php7/php-fpm.d/www.conf #uncommenting line && \
+    sed -i "s|display_errors\s*=\s*Off|display_errors = ${PHP_DISPLAY_ERRORS}|i" /etc/php7/php.ini && \
+    sed -i "s|display_startup_errors\s*=\s*Off|display_startup_errors = ${PHP_DISPLAY_STARTUP_ERRORS}|i" /etc/php7/php.ini && \
+    sed -i "s|error_reporting\s*=\s*E_ALL & ~E_DEPRECATED & ~E_STRICT|error_reporting = ${PHP_ERROR_REPORTING}|i" /etc/php7/php.ini && \
+    sed -i "s|;*memory_limit =.*|memory_limit = ${PHP_MEMORY_LIMIT}|i" /etc/php7/php.ini && \
+    sed -i "s|;*upload_max_filesize =.*|upload_max_filesize = ${PHP_MAX_UPLOAD}|i" /etc/php7/php.ini && \
+    sed -i "s|;*max_file_uploads =.*|max_file_uploads = ${PHP_MAX_FILE_UPLOAD}|i" /etc/php7/php.ini && \
+    sed -i "s|;*post_max_size =.*|post_max_size = ${PHP_MAX_POST}|i" /etc/php7/php.ini && \
+    sed -i "s|;*cgi.fix_pathinfo=.*|cgi.fix_pathinfo= ${PHP_CGI_FIX_PATHINFO}|i" /etc/php7/php.ini
+
+# 파일 복사
+COPY ./defaults/settings.json /defaults/settings.json
+COPY ./defaults/nginx.conf /etc/nginx/nginx.conf
+COPY --chown=www:www ./defaults/torr.php /www/torr/torr.php
+COPY ./defaults/h2.mv.db /defaults/h2.mv.db
 COPY ./defaults/run.sh /run.sh
+
+# [중요] ARM 에러 해결을 위해 run.sh 수정 없이 빌드 시점에서 옵션 제거
 RUN sed -i 's/-Xshareclasses -Xquickstart//g' /run.sh && \
     sed -i 's|/torrssen2/docker/torrssen2-\*.jar|/torrssen2.jar|g' /run.sh && \
-    chmod +x /run.sh
+    chown root:root /run.sh && \
+    chmod 0555 /run.sh
 
-ENTRYPOINT ["/bin/bash", "/run.sh"]
+# Ports and Volumes
+EXPOSE 8080
+VOLUME /root/data /download
+
+# Run
+ENTRYPOINT /run.sh
