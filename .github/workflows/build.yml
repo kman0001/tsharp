@@ -27,7 +27,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           # Fine-grained 대신 Classic PAT(MY_PAT) 사용 권장
-          password: ${{ secrets.GH_PAT }} 
+          password: ${{ secrets.GITHUB_TOKEN }} 
 
       - name: Build and Push
         uses: docker/build-push-action@v5
