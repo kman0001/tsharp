@@ -16,12 +16,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 멀티 아키텍처 빌드를 위한 QEMU 설정
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
+      # Docker Buildx 설정 (멀티 아키텍처 핵심 도구)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # GitHub 컨테이너 레지스트리 로그인
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -29,6 +32,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 통합 빌드 및 푸시
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
@@ -38,21 +42,22 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:latest
+          # 캐시 충돌(unknown/unknown) 방지를 위해 mode: min 권장
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
 
-  # 2. 빌드 성공 후 구버전 정리 작업
+  # 2. 빌드 성공 후 구버전 정리 작업 (latest 태그만 남기기)
   cleanup:
     runs-on: ubuntu-latest
-    needs: build # 빌드가 성공해야만 실행됨
+    needs: build
     permissions:
       packages: write
     steps:
       - name: Delete old package versions
         uses: actions/delete-package-versions@v5
         with:
-          # 패키지 이름이 레포지토리 이름과 다른 경우 직접 입력하세요 (예: 'torrssen2')
+          # 레포지토리 이름과 패키지 이름이 같다고 가정 (tsharp)
           package-name: ${{ github.event.repository.name }}
           package-type: 'container'
-          min-versions-to-keep: 1 # 최신 1개만 유지
-          ignore-versions: 'latest' # latest 태그는 절대 삭제 안 함
+          min-versions-to-keep: 1
+          ignore-versions: 'latest'
