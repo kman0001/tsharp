@@ -52,7 +52,7 @@ jobs:
         uses: actions/delete-package-versions@v5
         with:
           # 삭제 권한이 있는 Classic PAT 사용 필수
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           package-name: 'tsharp'
           package-type: 'container'
           min-versions-to-keep: 1
