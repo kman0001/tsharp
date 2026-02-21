@@ -27,7 +27,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           # Fine-grained 대신 Classic PAT(MY_PAT) 사용 권장
-          password: ${{ secrets.GITHUBTOKEN }} 
+          password: ${{ secrets.GH_PAT }} 
 
       - name: Build and Push
         uses: docker/build-push-action@v5
@@ -52,7 +52,7 @@ jobs:
         uses: actions/delete-package-versions@v5
         with:
           # 삭제 권한이 있는 Classic PAT 사용 필수
-          token: ${{ secrets.GITHUBTOKEN }}
+          token: ${{ secrets.GH_PAT }}
           package-name: 'tsharp'
           package-type: 'container'
           min-versions-to-keep: 1
