@@ -1,4 +1,4 @@
-name: Build Separate Archs
+name: Separate Multi-Arch Build
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 1. AMD64 빌드 (원본 기반)
+  # PC용 빌드 (기존 Dockerfile 사용)
   build-amd64:
     runs-on: ubuntu-latest
     steps:
@@ -21,13 +21,13 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile  # 기존 원본 기반 Dockerfile
+          file: ./Dockerfile
           platforms: linux/amd64
           push: true
           tags: ghcr.io/${{ github.repository }}:latest-amd64
 
-  # 2. ARM64 빌드 (OpenJDK 기반)
-  build-arm64:
+  # ARM용 빌드 (새로 만든 Dockerfile.arm 사용)
+  build-arm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,11 +39,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build ARM64
+      - name: Build ARM
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.arm64
+          file: ./Dockerfile.arm
           platforms: linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository }}:latest-arm64
