@@ -1,5 +1,8 @@
 # 1. 원본에서 파일만 추출
+ARG TARGETPLATFORM
 FROM --platform=linux/amd64 tarpha/torrssen2:latest AS source
+
+FROM --platform=$TARGETPLATFORM alpine:3.12
 
 # 2. 멀티 아키텍처 지원 베이스 이미지 (Alpine 3.12)
 FROM alpine:3.12
@@ -67,4 +70,5 @@ EXPOSE 8080
 VOLUME ["/config", "/download", "/root/data"]
 
 ENTRYPOINT ["/bin/bash", "/run.sh"]
+
 
