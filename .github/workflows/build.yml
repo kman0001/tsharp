@@ -36,8 +36,7 @@ jobs:
           file: ./Dockerfile 
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/kman0001/tsharp:latest
           # [핵심] unknown/unknown 방지 및 Portainer 호환성 확보
           provenance: false
           # 안정적인 캐시 설정
