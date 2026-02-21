@@ -1,49 +1,49 @@
-name: Separate Multi-Arch Build
+name: Integrated Multi-Arch Build
 
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch: # 수동 실행 버튼
 
 jobs:
-  # PC용 빌드 (기존 Dockerfile 사용)
-  build-amd64:
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build AMD64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}:latest-amd64
+    permissions:
+      contents: read
+      packages: write
 
-  # ARM용 빌드 (새로 만든 Dockerfile.arm 사용)
-  build-arm:
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 멀티 아키텍처 빌드를 위한 에뮬레이터 설정
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
+      # Docker Buildx 설정 (멀티 아키텍처 핵심 도구)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # GitHub 컨테이너 레지스트리 로그인
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build ARM
+
+      # 통합 빌드 및 푸시
+      - name: Build and Push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.arm
-          platforms: linux/arm64
+          # 파일명이 Dockerfile 인지 꼭 확인하세요!
+          file: ./Dockerfile 
+          # amd64와 arm64를 한 번에 빌드하여 하나의 매니페스트로 묶음
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest-arm64
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+          # 캐시 적용 (다음 빌드 속도 향상)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
