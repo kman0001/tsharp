@@ -39,6 +39,7 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:latest
           provenance: false
+          sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
