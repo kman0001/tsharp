@@ -43,8 +43,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:latest
           # 캐시 충돌(unknown/unknown) 방지를 위해 mode: min 권장
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          #cache-from: type=gha
+          #cache-to: type=gha,mode=min
 
   # 2. 빌드 성공 후 구버전 정리 작업 (latest 태그만 남기기)
   cleanup:
