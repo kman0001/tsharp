@@ -43,6 +43,7 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:latest
           # 캐시 충돌(unknown/unknown) 방지를 위해 mode: min 권장
+          no-cache: true
           #cache-from: type=gha
           #cache-to: type=gha,mode=min
 
