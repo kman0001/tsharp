@@ -1,0 +1,23 @@
+# 1. 원본에서 파일만 추출 (빌드 서버는 amd64이므로 가능)
+FROM --platform=linux/amd64 tarpha/torrssen2:latest AS source
+
+# 2. 실제 ARM 실행 환경 (OpenJDK 사용)
+FROM alpine:3.12
+
+ENV PUID=0 PGID=100
+
+# 필수 패키지 설치
+RUN apk update && apk add --no-cache \
+    openjdk8-jre transmission-daemon nginx php7 php7-fpm php7-openssl php7-curl bash curl sed
+
+# 파일 배치
+COPY --from=source /torrssen2.jar /torrssen2.jar
+# (기존 PHP 및 Nginx 설정 생략 - 이전 소스와 동일)
+
+# [핵심] ARM 전용: run.sh에서 JVM 옵션을 강제로 삭제하여 복사
+COPY ./defaults/run.sh /run.sh
+RUN sed -i 's/-Xshareclasses -Xquickstart//g' /run.sh && \
+    sed -i 's|/torrssen2/docker/torrssen2-\*.jar|/torrssen2.jar|g' /run.sh && \
+    chmod +x /run.sh
+
+ENTRYPOINT ["/bin/bash", "/run.sh"]
