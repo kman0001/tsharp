@@ -1,63 +1,67 @@
-# 1단계: 원본 이미지에서 파일 추출
-FROM tarpha/torrssen2:latest AS source
+FROM tarpha/torrssen2
 
-# 2단계: 실제 실행용 멀티 아키텍처 이미지 (Alpine 3.12)
-FROM alpine:3.12
+ENV PUID 0
+ENV PGID 100
 
-# 환경 변수 설정
-ENV PUID=0 PGID=100
-
-# 필수 패키지 설치 (git은 run.sh의 git pull 에러 방지용)
-RUN apk update && apk add --no-cache \
-    openjdk8-jre \
+# Install packages
+RUN apk update && \
+    apk add --no-cache \
     transmission-daemon \
     nginx \
     php7 \
     php7-fpm \
     php7-openssl \
-    php7-curl \
-    bash \
-    curl \
-    sed \
-    git
+    php7-curl
 
-# 1. [핵심] run.sh가 찾는 경로 강제로 만들기
-# run.sh 46행: cd /torrssen2 && git pull
-# run.sh 48행: cp /torrssen2/docker/torrssen2-*.jar torrssen2.jar
-RUN mkdir -p /torrssen2/docker && \
-    cd /torrssen2 && git init && \
-    git config user.email "you@example.com" && \
-    git config user.name "Your Name" && \
-    git commit --allow-empty -m "init"
+# Transmission
+RUN mkdir -p /config
 
-# 2. 원본 jar 파일을 복사될 위치에 미리 넣어둠
-COPY --from=source /torrssen2.jar /torrssen2/docker/torrssen2-current.jar
-
-# 3. [핵심] Java 옵션 에러 해결 (Wrapper 스크립트)
-# OpenJDK에서 인식 못하는 -Xshareclasses 등을 실행 직전에 가로채서 삭제함
-RUN mv /usr/bin/java /usr/bin/java-original && \
-    echo '#!/bin/bash' > /usr/bin/java && \
-    echo 'exec /usr/bin/java-original "${@//-Xshareclasses/}" "${@//-Xquickstart/}"' >> /usr/bin/java && \
-    chmod +x /usr/bin/java
-
-# 4. 나머지 기존 설정 (사용자 추가, PHP 설정 등)
+# Nginx
 RUN adduser -D -g 'www' www && \
-    mkdir -p /config /www/torr /run/nginx /defaults && \
+    mkdir -p /www/torr /run/nginx && \
     chown -R www:www /var/lib/nginx /www
 
-# [제공해주신 PHP sed 명령어들 삽입 위치]
-# RUN sed -i ... (기존 설정 그대로 사용)
+# PHP7
+ENV PHP_FPM_USER "www"
+ENV PHP_FPM_GROUP "www"
+ENV PHP_FPM_LISTEN_MODE "0660"
+ENV PHP_MEMORY_LIMIT "512M"
+ENV PHP_MAX_UPLOAD "50M"
+ENV PHP_MAX_FILE_UPLOAD "200"
+ENV PHP_MAX_POST "100M"
+ENV PHP_DISPLAY_ERRORS "On"
+ENV PHP_DISPLAY_STARTUP_ERRORS "On"
+ENV PHP_ERROR_REPORTING "E_COMPILE_ERROR\|E_RECOVERABLE_ERROR\|E_ERROR\|E_CORE_ERROR"
+ENV PHP_CGI_FIX_PATHINFO 0
+RUN sed -i "s|;listen.owner\s*=\s*nobody|listen.owner = ${PHP_FPM_USER}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|;listen.group\s*=\s*nobody|listen.group = ${PHP_FPM_GROUP}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|;listen.mode\s*=\s*0660|listen.mode = ${PHP_FPM_LISTEN_MODE}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|user\s*=\s*nobody|user = ${PHP_FPM_USER}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|group\s*=\s*nobody|group = ${PHP_FPM_GROUP}|g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s|;log_level\s*=\s*notice|log_level = notice|g" /etc/php7/php-fpm.d/www.conf #uncommenting line && \
+    sed -i "s|display_errors\s*=\s*Off|display_errors = ${PHP_DISPLAY_ERRORS}|i" /etc/php7/php.ini && \
+    sed -i "s|display_startup_errors\s*=\s*Off|display_startup_errors = ${PHP_DISPLAY_STARTUP_ERRORS}|i" /etc/php7/php.ini && \
+    sed -i "s|error_reporting\s*=\s*E_ALL & ~E_DEPRECATED & ~E_STRICT|error_reporting = ${PHP_ERROR_REPORTING}|i" /etc/php7/php.ini && \
+    sed -i "s|;*memory_limit =.*|memory_limit = ${PHP_MEMORY_LIMIT}|i" /etc/php7/php.ini && \
+    sed -i "s|;*upload_max_filesize =.*|upload_max_filesize = ${PHP_MAX_UPLOAD}|i" /etc/php7/php.ini && \
+    sed -i "s|;*max_file_uploads =.*|max_file_uploads = ${PHP_MAX_FILE_UPLOAD}|i" /etc/php7/php.ini && \
+    sed -i "s|;*post_max_size =.*|post_max_size = ${PHP_MAX_POST}|i" /etc/php7/php.ini && \
+    sed -i "s|;*cgi.fix_pathinfo=.*|cgi.fix_pathinfo= ${PHP_CGI_FIX_PATHINFO}|i" /etc/php7/php.ini
 
-# 설정 파일 복사
+# Copy files
 COPY ./defaults/settings.json /defaults/settings.json
 COPY ./defaults/nginx.conf /etc/nginx/nginx.conf
 COPY --chown=www:www ./defaults/torr.php /www/torr/torr.php
 COPY ./defaults/h2.mv.db /defaults/h2.mv.db
 COPY ./defaults/run.sh /run.sh
 
-RUN chmod 0555 /run.sh
+# Initial script
+RUN chown root:root /run.sh && \
+    chmod 0555 /run.sh
 
+# Ports and Volumes
 EXPOSE 8080
-VOLUME ["/root/data", "/download"]
+VOLUME /root/data /download
 
-ENTRYPOINT ["/bin/bash", "/run.sh"]
+# Run
+ENTRYPOINT /run.sh
