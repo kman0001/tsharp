@@ -36,8 +36,8 @@ jobs:
           file: ./Dockerfile 
           platforms: linux/amd64,linux/arm64
           push: true
-          # 레포지토리 이름을 소문자로 강제 변환하여 지정
-          tags: ghcr.io/kman0001/tsharp:latest
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=min
