@@ -1,31 +1,25 @@
-# 1. 원본에서 파일만 추출
-ARG TARGETPLATFORM
-FROM --platform=linux/amd64 tarpha/torrssen2:latest AS source
+FROM tarpha/torrssen2
 
-FROM --platform=$TARGETPLATFORM alpine:3.12
+ENV PUID 0
+ENV PGID 100
 
-# 2. 멀티 아키텍처 지원 베이스 이미지 (Alpine 3.12)
-FROM alpine:3.12
-
-# 환경 변수 설정
-ENV PUID=0 PGID=100
-
-# [Transmission 설치] - 여기서 각 아키텍처에 맞는 바이너리가 자동으로 깔립니다.
-RUN apk update && apk add --no-cache \
+# Install packages
+RUN apk update && \
+    apk add --no-cache \
     transmission-daemon \
-    openjdk8-jre nginx php7 php7-fpm php7-openssl php7-curl bash curl sed git
+    nginx \
+    php7 \
+    php7-fpm \
+    php7-openssl \
+    php7-curl
 
-# [Transmission 설정] - 기존에 작성하신 경로 설정을 그대로 유지합니다.
-RUN mkdir -p /config /download /root/data && \
-    chmod 0755 /config /download /root/data
+# Transmission
+RUN mkdir -p /config
 
-# [기존 Nginx/PHP 설정]
+# Nginx
 RUN adduser -D -g 'www' www && \
     mkdir -p /www/torr /run/nginx && \
     chown -R www:www /var/lib/nginx /www
-
-# 원본에서 추출한 jar 파일 배치
-COPY --from=source /torrssen2.jar /torrssen2.jar
 
 # PHP7
 ENV PHP_FPM_USER "www"
@@ -54,21 +48,20 @@ RUN sed -i "s|;listen.owner\s*=\s*nobody|listen.owner = ${PHP_FPM_USER}|g" /etc/
     sed -i "s|;*post_max_size =.*|post_max_size = ${PHP_MAX_POST}|i" /etc/php7/php.ini && \
     sed -i "s|;*cgi.fix_pathinfo=.*|cgi.fix_pathinfo= ${PHP_CGI_FIX_PATHINFO}|i" /etc/php7/php.ini
 
-# 설정 파일 및 실행 스크립트 복사
+# Copy files
 COPY ./defaults/settings.json /defaults/settings.json
 COPY ./defaults/nginx.conf /etc/nginx/nginx.conf
 COPY --chown=www:www ./defaults/torr.php /www/torr/torr.php
 COPY ./defaults/h2.mv.db /defaults/h2.mv.db
 COPY ./defaults/run.sh /run.sh
 
-# [중요] ARM/AMD64 공용 호환을 위해 run.sh 자동 패치
-RUN sed -i 's/-Xshareclasses -Xquickstart//g' /run.sh && \
-    sed -i 's|/torrssen2/docker/torrssen2-\*.jar|/torrssen2.jar|g' /run.sh && \
+# Initial script
+RUN chown root:root /run.sh && \
     chmod 0555 /run.sh
 
+# Ports and Volumes
 EXPOSE 8080
-VOLUME ["/config", "/download", "/root/data"]
+VOLUME /root/data /download
 
-ENTRYPOINT ["/bin/bash", "/run.sh"]
-
-
+# Run
+ENTRYPOINT /run.sh
